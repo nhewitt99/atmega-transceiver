@@ -100,7 +100,7 @@ bool nrfSetupRF(void)
 	// set redundant 250kbps bits,
 	// set -12dBm tx power
 	uint8_t setup = 0 | (1<<NRF_RF_SETUP_RF_DR_LOW)
-			| (0b10<<NRF_RF_SETUP_RF_DR_HIGH)
+			| (0<<NRF_RF_SETUP_RF_DR_HIGH)
 			| (0b01<<NRF_RF_SETUP_RF_PWR);
 	uint8_t status = nrfWriteReg(NRF_RF_SETUP, setup);
 
@@ -166,14 +166,46 @@ void nrfSetMode(nrf_state state)
 	}
 }
 
+void blinkBinary(uint8_t data)
+{
+	for(int i = 7; i >= 0; i--)
+	{
+		PORTD |= (1<<7);
+		if(data & (1<<i))
+		{
+			_delay_ms(750);
+			PORTD &= ~(1<<7);
+			_delay_ms(250);
+		}
+		else
+		{
+			_delay_ms(250);
+			PORTD &= ~(1<<7);
+			_delay_ms(750);
+		}
+	}
+}
+
 int main()
 {
 	DDRD |= (1 << 7);    // Make pin 13 be an output.
 	SPI_MasterInit();
+	//nrfPowerUp();
+	nrfSetup();
+	//nrfSetMode(rx);
+	uint8_t config, rf, channel;
+
 	while(1)
 	{
-		//_delay_ms(500);
-		PORTD ^= (1 << 7);
-		SPI_MasterTransmit(180);
+		config = nrfReadReg(NRF_CONFIG);
+		rf = nrfReadReg(NRF_RF_SETUP);
+		channel = nrfReadReg(NRF_RF_CH);
+
+		blinkBinary(config);
+		_delay_ms(1000);
+		blinkBinary(rf);
+		_delay_ms(1000);
+		blinkBinary(channel);
+		_delay_ms(1000);
 	}
 }
