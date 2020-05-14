@@ -76,6 +76,12 @@ uint8_t nrfReadReg(uint8_t reg)
 	return data;
 }
 
+/*
+ * Puts a stream of bytes into nrf's transmit buffer
+ * data: pointer to first byte
+ * len: length of bytes, should match rx's payload setting
+ * return: status register
+ */
 uint8_t nrfTransmit(uint8_t* data, uint8_t len)
 {
 	// high-to-low signals a command
@@ -83,6 +89,7 @@ uint8_t nrfTransmit(uint8_t* data, uint8_t len)
 
 	uint8_t status = SPI_MasterTransmit(NRF_W_TX_PAYLOAD);
 
+	// iterate through bytes
 	for(uint8_t i = 0; i < len; i++)
 		SPI_MasterTransmit(*(data + 8*i));
 
