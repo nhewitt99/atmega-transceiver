@@ -1,3 +1,5 @@
+#define MODE tx
+
 #define F_CPU 1000000UL // 1 MHz
 #include <stdbool.h>
 #include <avr/io.h>
@@ -72,6 +74,20 @@ uint8_t nrfReadReg(uint8_t reg)
 
 	PORT_SPI |= (1<<DD_SS);
 	return data;
+}
+
+uint8_t nrfTransmit(uint8_t* data, uint8_t len)
+{
+	// high-to-low signals a command
+	PORT_SPI &= ~(1<<DD_SS);
+
+	uint8_t status = SPI_MasterTransmit(NRF_W_TX_PAYLOAD);
+
+	for(uint8_t i = 0; i < len; i++)
+		SPI_MasterTransmit(*(data + 8*i));
+
+	PORT_SPI |= (1<<DD_SS);
+	return status;
 }
 
 /*  Powers up nrf chip
@@ -190,10 +206,14 @@ int main()
 {
 	DDRD |= (1 << 7);    // Make pin 13 be an output.
 	SPI_MasterInit();
-	//nrfPowerUp();
 	nrfSetup();
-	//nrfSetMode(rx);
+	nrfSetMode(MODE);
 	uint8_t config, rf, channel;
+
+	if(MODE == tx) {
+		uint8_t test[2] = {170, 85};
+		nrfTransmit(test, 2);
+	}
 
 	while(1)
 	{
