@@ -1,4 +1,4 @@
-#define MODE tx
+#define MODE rx
 
 #define F_CPU 1000000UL // 1 MHz
 #include <stdbool.h>
@@ -76,8 +76,7 @@ uint8_t nrfReadReg(uint8_t reg)
 	return data;
 }
 
-/*
- * Puts a stream of bytes into nrf's transmit buffer
+/* Puts a stream of bytes into nrf's transmit buffer
  * data: pointer to first byte
  * len: length of bytes, should match rx's payload setting
  * return: status register
@@ -92,6 +91,26 @@ uint8_t nrfTransmit(uint8_t* data, uint8_t len)
 	// iterate through bytes
 	for(uint8_t i = 0; i < len; i++)
 		SPI_MasterTransmit(*(data + 8*i));
+
+	PORT_SPI |= (1<<DD_SS);
+	return status;
+}
+
+/* Reads a payload of bytes from receive buffer
+ * data: pointer to store rx data in
+ * len: length of data's structure, should equal payload size
+ * return: status register
+ */
+uint8_t nrfReceive(uint8_t* data, uint8_t len)
+{
+	// high-to-low signals a command
+	PORT_SPI &= ~(1<<DD_SS);
+
+	uint8_t status = SPI_MasterTransmit(NRF_R_RX_PAYLOAD);
+
+	// iterate through bytes
+	for(uint8_t i = 0; i < len; i++)
+		*(data + 8*i) = SPI_MasterTransmit(0); //dummy value to clock
 
 	PORT_SPI |= (1<<DD_SS);
 	return status;
@@ -211,28 +230,29 @@ void blinkBinary(uint8_t data)
 
 int main()
 {
-	DDRD |= (1 << 7);    // Make pin 13 be an output.
+	DDRD |= (1 << 7);    // Make pin 13 be an output
+	DDRB &= (1 << 0);    // pin 14 input
 	SPI_MasterInit();
 	nrfSetup();
 	nrfSetMode(MODE);
-	uint8_t config, rf, channel;
 
-	if(MODE == tx) {
-		uint8_t test[2] = {170, 85};
-		nrfTransmit(test, 2);
-	}
-
+#if MODE == tx
+	uint8_t data[2] = {170, 85};
 	while(1)
 	{
-		config = nrfReadReg(NRF_CONFIG);
-		rf = nrfReadReg(NRF_RF_SETUP);
-		channel = nrfReadReg(NRF_RF_CH);
-
-		blinkBinary(config);
-		_delay_ms(1000);
-		blinkBinary(rf);
-		_delay_ms(1000);
-		blinkBinary(channel);
-		_delay_ms(1000);
+		nrfTransmit(data, 2);
+		_delay_ms(20000);
 	}
+#else
+	uint8_t data[2];
+	while(1)
+	{
+		if(~(PINB & (1 << 0)))
+		{
+			nrfReceive(data, 2);
+			blinkBinary(data[0]);
+			blinkBinary(data[1]);
+		}
+	}
+#endif
 }
