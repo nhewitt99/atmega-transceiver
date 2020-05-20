@@ -1,5 +1,3 @@
-#define MODE rx
-
 #define F_CPU 1000000UL // 1 MHz
 #include <stdbool.h>
 #include <avr/io.h>
@@ -21,6 +19,8 @@
 #define DDR_CE DDRB
 #define DD_CE 1
 
+const nrf_state MODE = tx;
+
 void SPI_MasterInit(void)
 {
 	/* Set MOSI, SCK, SS output, others input */
@@ -37,6 +37,20 @@ uint8_t SPI_MasterTransmit(uint8_t cData)
 	/* Wait for tx to end (idk why this works) */
 	while(!(SPSR & (1<<SPIF)));
 	return SPDR;
+}
+
+/*  Performs no operation command on nrf chip
+ *  return: STATUS register
+ */
+uint8_t nrfNop(void)
+{
+	// high-to-low signals a command
+	PORT_SPI &= ~(1<<DD_SS);
+
+	uint8_t status = SPI_MasterTransmit(NRF_NOP);
+
+	PORT_SPI |= (1<<DD_SS);
+	return status;
 }
 
 /*  Writes a value to a register on the nrf chip
@@ -90,7 +104,7 @@ uint8_t nrfTransmit(uint8_t* data, uint8_t len)
 
 	// iterate through bytes
 	for(uint8_t i = 0; i < len; i++)
-		SPI_MasterTransmit(*(data + 8*i));
+		SPI_MasterTransmit(*(data + i));
 
 	PORT_SPI |= (1<<DD_SS);
 	return status;
@@ -110,7 +124,7 @@ uint8_t nrfReceive(uint8_t* data, uint8_t len)
 
 	// iterate through bytes
 	for(uint8_t i = 0; i < len; i++)
-		*(data + 8*i) = SPI_MasterTransmit(0); //dummy value to clock
+		*(data + i) = SPI_MasterTransmit(0); //dummy value to clock
 
 	PORT_SPI |= (1<<DD_SS);
 	return status;
@@ -139,7 +153,6 @@ bool nrfPowerUp(void)
 bool nrfSetupRF(void)
 {
 	// set 250kbps data rate,
-	// set redundant 250kbps bits,
 	// set -12dBm tx power
 	uint8_t setup = 0 | (1<<NRF_RF_SETUP_RF_DR_LOW)
 			| (0<<NRF_RF_SETUP_RF_DR_HIGH)
@@ -178,6 +191,12 @@ void nrfSetup(void)
 
 	// set payload size
 	nrfWriteReg(NRF_RX_PW_P0, 2);
+
+	// disable autoack
+	// TODO: this is only because it's causing me issues
+	//  and is somewhat hackey. may want to reassess later.
+	nrfWriteReg(NRF_EN_AA, 0);
+	nrfWriteReg(NRF_SETUP_RETR, 0);
 
 	// enable chip to start rx mode
 	DDR_CE |= (1<<DD_CE);
@@ -231,28 +250,38 @@ void blinkBinary(uint8_t data)
 int main()
 {
 	DDRD |= (1 << 7);    // Make pin 13 be an output
-	DDRB &= (1 << 0);    // pin 14 input
+	DDRB &= ~(1 << 0);   // pin 14 input
 	SPI_MasterInit();
 	nrfSetup();
 	nrfSetMode(MODE);
 
-#if MODE == tx
+	blinkBinary(nrfReadReg(NRF_CONFIG));
+
+	if(MODE == tx)
+	{
 	uint8_t data[2] = {170, 85};
 	while(1)
 	{
 		nrfTransmit(data, 2);
-		_delay_ms(20000);
+		blinkBinary(nrfNop());
+		_delay_ms(12000);
+		//PORTD ^= (1<<7);
 	}
-#else
-	uint8_t data[2];
+	}
+	else
+	{
+	uint8_t data[2] = {0,255};
 	while(1)
 	{
-		if(~(PINB & (1 << 0)))
+		uint8_t irqPin = PINB & (1<<0);
+		if(irqPin == 0)
 		{
 			nrfReceive(data, 2);
-			blinkBinary(data[0]);
+			//blinkBinary(data[0]);
 			blinkBinary(data[1]);
+			nrfWriteReg(NRF_STATUS, 255); // clear interrupt
+			nrfWriteReg(NRF_STATUS, 0);
 		}
 	}
-#endif
+	}
 }
