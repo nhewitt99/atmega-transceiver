@@ -19,6 +19,9 @@
 #define DDR_CE DDRB
 #define DD_CE 1
 
+// ignore retransmit maximum from autoack
+#define IGNORE_MAX_RT
+
 const nrf_state MODE = tx;
 
 void SPI_MasterInit(void)
@@ -93,10 +96,18 @@ uint8_t nrfReadReg(uint8_t reg)
 /* Puts a stream of bytes into nrf's transmit buffer
  * data: pointer to first byte
  * len: length of bytes, should match rx's payload setting
+ * ignoreMaxRt: if true, overwrite maxrt interrupt
  * return: status register
  */
 uint8_t nrfTransmit(uint8_t* data, uint8_t len)
 {
+	#ifdef IGNORE_MAX_RT
+		nrfWriteReg(NRF_STATUS, 1<<NRF_STATUS_MAX_RT);
+		PORT_SPI &= ~(1<<DD_SS);
+		SPI_MasterTransmit(NRF_FLUSH_TX);
+		PORT_SPI |= (1<<DD_SS);
+	#endif
+
 	// high-to-low signals a command
 	PORT_SPI &= ~(1<<DD_SS);
 
@@ -192,11 +203,8 @@ void nrfSetup(void)
 	// set payload size
 	nrfWriteReg(NRF_RX_PW_P0, 2);
 
-	// disable autoack
-	// TODO: this is only because it's causing me issues
-	//  and is somewhat hackey. may want to reassess later.
-	nrfWriteReg(NRF_EN_AA, 0);
-	nrfWriteReg(NRF_SETUP_RETR, 0);
+	// change max retransmits to 15
+	nrfWriteReg(NRF_SETUP_RETR, 15);
 
 	// enable chip to start rx mode
 	DDR_CE |= (1<<DD_CE);
