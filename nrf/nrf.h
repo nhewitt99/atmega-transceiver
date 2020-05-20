@@ -1,7 +1,15 @@
-/* List of defines for interfacing nrf24l01 */
-// simple enum for tx/rx readability
-typedef enum {tx = 0, rx = 1} nrf_state;
+#ifndef NRF_H
+#define NRF_H
 
+#define F_CPU 1000000UL // 1 MHz
+#include <stdbool.h>
+#include <avr/io.h>
+#include <util/delay.h>
+
+// simple enum for tx/rx readability
+typedef enum {tx = 0, rx = 1} nrf_state_t;
+
+/* List of defines for interfacing nrf24l01 */
 // commands
 #define NRF_MASK_R_REGISTER 0b00000000
 #define NRF_MASK_W_REGISTER 0b00100000
@@ -89,3 +97,21 @@ typedef enum {tx = 0, rx = 1} nrf_state;
 #define NRF_FEATURE_EN_DPL 2
 #define NRF_FEATURE_EN_ACK_PAY 1
 #define NRF_FEATURE_EN_DYN_ACK 0
+
+/* Function prototypes, comments in nrf.c */
+void SPI_MasterInit(void);
+uint8_t SPI_MasterTransmit(uint8_t cData);
+uint8_t nrfNop(void);
+uint8_t nrfWriteReg(uint8_t reg, uint8_t data);
+uint8_t nrfReadReg(uint8_t reg);
+uint8_t nrfTransmit(uint8_t* data, uint8_t len);
+uint8_t nrfReceive(uint8_t* data, uint8_t len);
+bool nrfPowerUp(void);
+bool nrfSetupRF(void);
+bool nrfSetChannel(uint8_t channel);
+void nrfSetup(void);
+void nrfSetMode(nrf_state_t state);
+void blinkBinary(uint8_t data);
+
+#endif
+
